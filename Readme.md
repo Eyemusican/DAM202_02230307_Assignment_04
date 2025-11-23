@@ -1,321 +1,415 @@
-# Transformer Decoder for Neural Machine Translation
-**Assignment 4 - DAM202**  
-**English-German Translation using Encoder-Decoder Architecture**
+# Transformer Decoder for Machine Translation
+
+**Module Code:** DAM202  
+**Assignment:** Transformer Decoder Implementation  
+**Task:** English to German Machine Translation  
+**Submission Date:** November 22, 2025
+
+
+
+## Project Overview
+
+This project implements a complete Transformer decoder-based sequence-to-sequence model for machine translation from English to German. The implementation includes:
+
+- **Full Encoder-Decoder Architecture** with multi-head attention mechanisms
+- **Causal Masking** for autoregressive generation
+- **Three Decoding Strategies**: Greedy, Beam Search, and Nucleus Sampling
+- **Comprehensive Training Pipeline** with early stopping and learning rate scheduling
+- **BLEU Score Evaluation** for quantitative assessment
+
+### Dataset
+- **Source:** WMT14 English-German Translation Dataset
+- **Training Samples:** 50,000 sentence pairs
+- **Validation Samples:** 1,000 sentence pairs
+- **Maximum Sequence Length:** 64 tokens
 
 ---
 
-## 1. Introduction
+## Architecture
 
-This project implements a complete Transformer Decoder system for sequence-to-sequence translation. The model translates English text to German using the WMT14 dataset.
+### Model Specifications
 
-**Key Components:**
-- Encoder-decoder architecture with cross-attention
-- Causal masking for autoregressive generation
-- Three decoding strategies: Greedy, Beam Search, Nucleus Sampling
-- BLEU score evaluation
+```
+Model Configuration:
+├── Embedding Dimension (d_model): 256
+├── Number of Attention Heads: 8
+├── Number of Encoder Layers: 3
+├── Number of Decoder Layers: 3
+├── Feed-Forward Dimension (d_ff): 512
+├── Dropout Rate: 0.1
+├── Maximum Sequence Length: 128
+└── Total Parameters: 19,611,450
+```
+
+### Architecture Components
+
+#### 1. **Multi-Head Attention**
+The core attention mechanism with separate Query, Key, and Value projections:
+
+```python
+class MultiHeadAttention(nn.Module):
+    def __init__(self, d_model, num_heads):
+        # Separate linear layers for Q, K, V
+        self.q_linear = nn.Linear(d_model, d_model)
+        self.k_linear = nn.Linear(d_model, d_model)
+        self.v_linear = nn.Linear(d_model, d_model)
+```
+
+**Key Features:**
+- Scaled dot-product attention with temperature scaling
+- Parallel attention heads for capturing diverse linguistic patterns
+- Proper masking support for both padding and causal constraints
+
+#### 2. **Encoder Layer**
+Processes source sequences with self-attention:
+
+```python
+class EncoderLayer(nn.Module):
+    def forward(self, x, mask=None):
+        # Self-attention
+        attn_output = self.self_attn(x, x, x, mask)
+        x = self.norm1(x + self.dropout(attn_output))
+        
+        # Feed-forward
+        ff_output = self.ff(x)
+        x = self.norm2(x + self.dropout(ff_output))
+```
+
+**Components:**
+- Self-attention mechanism
+- Position-wise feed-forward network
+- Layer normalization and residual connections
+
+#### 3. **Decoder Layer**
+Generates target sequences with cross-attention to encoder outputs:
+
+```python
+class DecoderLayer(nn.Module):
+    def forward(self, x, enc_output, src_mask, tgt_mask):
+        # Self-attention with causal mask
+        attn_output = self.self_attn(x, x, x, tgt_mask)
+        x = self.norm1(x + self.dropout(attn_output))
+        
+        # Cross-attention to encoder
+        attn_output = self.cross_attn(x, enc_output, enc_output, src_mask)
+        x = self.norm2(x + self.dropout(attn_output))
+```
+
+**Key Features:**
+- Masked self-attention for autoregressive generation
+- Cross-attention to encoder representations
+- Triple normalization layers for stable training
+
+#### 4. **Positional Encoding**
+Sinusoidal position embeddings to inject sequence order information:
+
+```python
+def _generate_positional_encoding(self, max_len, d_model):
+    pe[:, 0::2] = torch.sin(position * div_term)
+    pe[:, 1::2] = torch.cos(position * div_term)
+```
 
 ---
 
-## 2. Architecture
+## Implementation Details
 
-### 2.1 Model Configuration
-```
-Embedding Dimension: 256
-Attention Heads: 8
-Encoder Layers: 3
-Decoder Layers: 3
-Feed-forward Dimension: 512
-Total Parameters: 19.6M
-```
+### 1. Data Preprocessing
 
-### 2.2 Key Components
+**Tokenization:**
+- Used BERT tokenizer (`bert-base-uncased`) for subword tokenization
+- Vocabulary size: 30,522 tokens
+- Maximum sequence length: 64 tokens
+- Padding and truncation applied uniformly
 
-**Multi-Head Attention:**
-- Separate Q, K, V projections
-- Scaled dot-product attention
-- Proper cross-attention (Query from decoder, Key/Value from encoder)
-
-**Decoder Layer:**
-1. Self-attention with causal mask (prevents future token access)
-2. Cross-attention to encoder outputs
-3. Position-wise feed-forward network
-4. Layer normalization and residual connections
-
-**Positional Encoding:**
-- Sinusoidal encoding for position information
-- Added to token embeddings
-
-
-
-## 3. Training Setup
-
-### 3.1 Dataset
-- **Source:** WMT14 English-German
-- **Training Samples:** 50,000
-- **Validation Samples:** 1,000
-- **Sequence Length:** 64 tokens
-
-### 3.2 Hyperparameters
-```
-Optimizer: AdamW
-Learning Rate: 0.0003
-Scheduler: ReduceLROnPlateau
-Batch Size: 16
-Loss Function: CrossEntropy with label smoothing (0.1)
-Max Epochs: 40
-Early Stopping: Patience 5
+**Dataset Loading:**
+```python
+dataset = load_dataset('wmt14', 'de-en', split=f'train[:50000]')
+val_dataset = load_dataset('wmt14', 'de-en', split=f'validation[:1000]')
 ```
 
-### 3.3 Training Process
-- Training stopped at epoch 32 via early stopping
-- Total training time: ~2.5 hours on GPU
-- Loss decreased steadily showing successful learning
+**Example Training Pair:**
+```
+Source (EN): "a republican strategy to counter the re-election of obama"
+Target (DE): "eine republikanische strategie, um der wiederwahl von obama entgegenzutreten"
+```
+
+### 2. Training Configuration
+
+**Optimizer:** AdamW
+- Learning Rate: 0.0003
+- Weight Decay: 0.01
+- Betas: (0.9, 0.98)
+
+**Loss Function:** CrossEntropyLoss
+- Label Smoothing: 0.1
+- Ignore padding tokens in loss calculation
+
+**Learning Rate Scheduler:** ReduceLROnPlateau
+- Mode: min (reduce on validation loss plateau)
+- Factor: 0.5
+- Patience: 2 epochs
+
+**Training Strategy:**
+- Batch Size: 16
+- Maximum Epochs: 40
+- Early Stopping Patience: 5 epochs
+- Gradient Clipping: Max norm 1.0
+
+### 3. Masking Mechanisms
+
+#### Causal Mask (Target Sequences)
+```python
+def create_causal_mask(size, device):
+    mask = torch.tril(torch.ones(size, size, device=device))
+    return mask.unsqueeze(0).unsqueeze(0)
+```
+
+Prevents the decoder from attending to future positions during training.
+
+#### Padding Mask (Source Sequences)
+```python
+def create_padding_mask(seq, pad_token_id):
+    return (seq != pad_token_id).unsqueeze(1).unsqueeze(2)
+```
+
+Ensures attention weights are not computed for padding tokens.
 
 ---
 
-## 4. Results
+## Training Process
 
-### 4.1 Training Metrics
-| Metric | Value |
-|--------|-------|
-| Final Training Loss | 2.89 |
-| Validation Loss | 4.57 |
-| Best Epoch | 9 |
-| Total Epochs | 14 |
+### Training Results
 
-**Training Curve:**
-![Training Loss Curve](training_curves.png)
-
-### 4.2 BLEU Scores
-
-**Quantitative Evaluation (100 validation samples):**
-
-| Strategy | BLEU-1 | BLEU-2 | BLEU-4 |
-|----------|--------|--------|--------|
-| Greedy | 23.90 | 11.51 | **2.98** |
-| Beam Search (width=5) | 20.64 | 10.26 | **2.97** |
-
-**Key Finding:** Beam search shows minimal improvement (-0.01 BLEU-4), indicating model capacity limitations rather than decoding strategy issues.
-
----
-
-## 5. Decoding Strategy Analysis
-
-### 5.1 Greedy Decoding
-**How it works:** Selects highest probability token at each step
-
-**Pros:**
-- Fast (single forward pass per token)
-- Deterministic output
-
-**Cons:**
-- Can get stuck in local optima
-- No exploration of alternatives
-
-**Example:**
+**Final Metrics After 32 Epochs (Early Stopping):**
 ```
-Source: "a republican strategy to counter the re-election of obama"
-Output: "wahlbeologien wir uns einen strategie zur bekampfung der strategie der wahlen"
+Training Loss:   2.8911
+Validation Loss: 4.5681
+Best Validation Loss: 4.5569 (Epoch 27)
 ```
 
-### 5.2 Beam Search
-**How it works:** Maintains top-k hypotheses (k=5)
+### Training Curves
 
-**Expected:** Better quality through exploration
-**Observed:** No improvement (BLEU 2.97 vs 2.98)
+![alt text](image-2.png)
 
-**Why beam search failed:**
-1. **Overfitting:** Model hasn't learned generalizable patterns
-2. **Length bias:** Beam search favors shorter outputs without length penalty
-3. **Limited search space:** When base model is weak, all beams are equally poor
+**Observations:**
+1. **Convergence Pattern:** Training loss decreased steadily from 4.68 to 2.89
+2. **Validation Behavior:** Validation loss plateaued around 4.55-4.60 after epoch 20
+3. **Overfitting:** Gap between training and validation loss indicates some overfitting
+4. **Early Stopping:** Triggered at epoch 32 after 5 epochs without validation improvement
 
-**Example:**
+### Epoch-by-Epoch Progress
+
+![alt text](image-3.png)
+
+ 
+
+## Decoding Strategies
+
+Three different decoding strategies were implemented and compared:
+
+### 1. Greedy Decoding
+
+**Algorithm:**
+```python
+def greedy_decode(model, src, max_len, start_token, end_token):
+    # At each step, select token with highest probability
+    next_token = logits.argmax(dim=-1)
 ```
-Source: "a republican strategy to counter the re-election of obama"
+
+**Characteristics:**
+- **Speed:** Fastest (single forward pass per token)
+- **Quality:** Deterministic but may miss better alternatives
+- **Use Case:** Real-time applications requiring low latency
+
+**Example Output:**
+```
+Input:  "a republican strategy to counter the re-election of obama"
+Output: "wahlbeologien wir uns einen strategie zur bekampfung der strategie der wahlen."
+```
+
+### 2. Beam Search
+
+**Algorithm:**
+```python
+def beam_search_decode(model, src, max_len, beam_width=5):
+    # Maintain top-k hypotheses at each step
+    beams = sorted(new_beams, key=lambda x: x[1], reverse=True)[:beam_width]
+```
+
+**Parameters:**
+- Beam Width: 5
+- Length Normalization: None (could be added)
+
+**Characteristics:**
+- **Speed:** Moderate (5x slower than greedy)
+- **Quality:** Better exploration of hypothesis space
+- **Use Case:** When quality is more important than speed
+
+**Example Output:**
+```
+Input:  "a republican strategy to counter the re-election of obama"
 Output: "durch die strategie der wahler strategie"
-(Shorter and incomplete compared to greedy)
 ```
 
-### 5.3 Nucleus Sampling
-**How it works:** Samples from top-p probability mass (p=0.9)
+### 3. Nucleus Sampling (Top-p)
 
-**Pros:**
-- High diversity
-- Good for creative generation
-
-**Cons:**
-- Non-deterministic
-- Quality varies per run
-
-**Example:**
+**Algorithm:**
+```python
+def nucleus_sampling_decode(model, src, p=0.9, temperature=0.8):
+    # Sample from top tokens whose cumulative probability > p
+    cumsum_probs = torch.cumsum(sorted_probs, dim=-1)
+    sorted_indices_to_remove = cumsum_probs > p
 ```
+
+**Parameters:**
+- Top-p (nucleus): 0.9
+- Temperature: 0.8
+
+**Characteristics:**
+- **Speed:** Fast (similar to greedy)
+- **Quality:** More diverse and creative outputs
+- **Use Case:** When variation in output is desired
+
+**Example Output:**
+```
+Input:  "a republican strategy to counter the re-election of obama"
 Output: "besonderen strategie fur die wahlen gewalt gehoren einer strategie..."
-(Most diverse but inconsistent quality)
 ```
 
 ---
 
-## 6. Qualitative Analysis
+## Results and Analysis
 
-### 6.1 Success Cases
+### Quantitative Evaluation (BLEU Scores)
 
-**Example 2:**
+Evaluated on 100 validation samples:
+
+
+![alt text](image-4.png)
+
+### Key Findings
+
+#### 1. **Overall Performance**
+- **BLEU-4 < 10:** Indicates limited training data (expected with 50k samples)
+- Model demonstrates understanding of translation task structure
+- Requires more training data for production-quality translations
+
+#### 2. **Decoding Strategy Comparison**
+- **Greedy vs Beam Search:** Minimal difference (-0.01 BLEU-4)
+- Beam search did not provide expected quality improvement
+- Suggests need for:
+  - Length normalization in beam search
+  - Larger beam width experimentation
+  - Better score combination strategies
+
+#### 3. **Qualitative Analysis**
+
+**Example 1: Partial Success**
+```
+Reference: "eine republikanische strategie, um der wiederwahl von obama entgegenzutreten"
+Greedy:    "wahlbeologien wir uns einen strategie zur bekampfung der strategie der wahlen."
+Analysis:  Captures key words (strategie, wahlen) but incorrect grammar and word choice
+```
+
+**Example 2: Vocabulary Issues**
 ```
 Reference: "die fuhrungskrafte der republikaner rechtfertigen ihre politik..."
-Greedy:    "die politik mussen gerechtfertigt werden, indem sie ihrer wahler..."
+Greedy:    "die politik mussen gerechtfertigt werden, indem sie ihrer wahler bekampfung..."
+Analysis:  Reasonable structure but missing vocabulary coverage
 ```
-✅ Correct verb: "gerechtfertigt" (justified)  
-✅ Proper grammar structure  
-✅ Captures core meaning
 
-### 6.2 Failure Patterns
+**Example 3: Repetition Problem**
+```
+Reference: "allerdings halt das brennan center letzteres fur einen mythos..."
+Greedy:    "diese zahl der betrugsbekampfung ist jedoch, daß die wahlen anzahl der wahlen..."
+Analysis:  Repetition of "wahlen anzahl" indicates model uncertainty
+```
 
-**Problem 1: Repetition**
-```
-Example 5: "bestimmungen werden immer negativen bestimmungen uber die negativen"
-```
-- Word "bestimmungen" repeated 3 times
-- Model stuck in loops despite causal masking
+### Common Issues Observed
 
-**Problem 2: Hallucinations**
-```
-Example 1: "wahlbeologien" (not a real German word)
-```
-- Insufficient vocabulary coverage
-- Model invents non-existent words
+1. **Vocabulary Gaps:** Missing specific political and technical terms
+2. **Grammar Errors:** Incorrect verb conjugations and article usage
+3. **Repetition:** Model sometimes repeats phrases when uncertain
+4. **Word Order:** Struggles with German's flexible word order
+5. **Compound Words:** Difficulty handling German compound nouns
 
-**Problem 3: Semantic Drift**
-```
-Example 4: Translates content about "United States" when source is about "lawyers"
-```
-- Loses context over longer sequences
-- Cross-attention not fully capturing source meaning
+
+
+## Key Findings
+
+### Strengths
+
+1.  **Functional Architecture:** Successfully implemented encoder-decoder with proper attention mechanisms
+2.  **Training Stability:** Model converged without gradient explosions or vanishing gradients
+3.  **Multiple Decoding Strategies:** All three approaches (greedy, beam, nucleus) working correctly
+
+
+### Limitations
+
+1.  **Limited Training Data:** 50k samples insufficient for high-quality translation
+2.  **Low BLEU Scores:** BLEU-4 ~3 indicates substantial room for improvement
+
+3.  **Beam Search:** No significant improvement over greedy (needs tuning)
+
+### Lessons Learned
+
+1. **Data is Crucial:** Translation quality heavily depends on training data quantity
+2. **Hyperparameter Tuning:** Default beam search parameters may not be optimal
+3. **Evaluation Metrics:** BLEU scores don't capture all aspects of translation quality
+4. **Architecture Choices:** Model size balanced well between performance and efficiency
 
 ---
 
-## 7. Discussion
+## Future Improvements
 
-### 7.1 Why BLEU Scores Are Low
+### Short-term Enhancements
 
-**1. Overfitting Evidence:**
-- Validation loss (4.57) >> Training loss (2.89)
-- Gap of 1.68 indicates memorization, not generalization
-- Model performs poorly on unseen data
+1. **Increase Training Data**
+   - Scale to 100k-500k sentence pairs
+   - Use data augmentation (back-translation)
 
-**2. Limited Training Data:**
-- 50k samples is minimal for NMT (production uses 1M+)
-- Insufficient coverage of vocabulary and patterns
+2. **Improve Beam Search**
+   - Add length normalization
+   - Implement coverage penalty to reduce repetition
+   - Experiment with beam widths: 3, 5, 10
 
-**3. Tokenizer Mismatch:**
-- BERT tokenizer optimized for English
-- German compounds poorly handled
+3. **Advanced Training Techniques**
+   - Label smoothing (already implemented: 0.1)
+   - Increase model capacity (d_model=512, layers=6)
+   - Longer training with cyclic learning rates
 
-**4. Architecture Constraints:**
-- Small model (256-dim vs 512-dim standard)
-- Few layers (3 vs 6+ for production systems)
 
-### 7.2 Comparison with Baselines
 
-| System | Training Data | BLEU-4 | Notes |
-|--------|---------------|--------|-------|
-| **Our Model** | 50k | 2.98 | As expected for limited data |
-| NMT Baseline | 50k | 3-8 | Literature range |
-| Production NMT | 1M+ | 25-35 | State-of-the-art systems |
+## References
 
-Our results align with expectations for the given constraints.
+### Academic Papers
 
-### 7.3 Impact of Training Data
+1. **Vaswani, A., et al. (2017).** "Attention Is All You Need." *Advances in Neural Information Processing Systems (NeurIPS)*, 30. [arXiv:1706.03762](https://arxiv.org/abs/1706.03762)
+   - Original Transformer architecture paper
 
-We compared 10k vs 50k training samples:
+2. **Bahdanau, D., Cho, K., & Bengio, Y. (2014).** "Neural Machine Translation by Jointly Learning to Align and Translate." *International Conference on Learning Representations (ICLR)*. [arXiv:1409.0473](https://arxiv.org/abs/1409.0473)
+   - Foundation of attention mechanisms
 
-| Metric | 10k Data | 50k Data | Improvement |
-|--------|----------|----------|-------------|
-| BLEU-4 | 0.41 | 2.98 | **+626%** |
-| Training Loss | 3.21 | 2.89 | +10% |
-| Validation Loss | 5.30 | 4.57 | +14% |
+3. **Sutskever, I., Vinyals, O., & Le, Q. V. (2014).** "Sequence to Sequence Learning with Neural Networks." *Advances in Neural Information Processing Systems (NeurIPS)*, 27.
+   - Seq2seq architecture basics
 
-**Key Insight:** Increasing data 5x improved BLEU by 7x, demonstrating data is the primary bottleneck.
+4. **Holtzman, A., et al. (2019).** "The Curious Case of Neural Text Degeneration." *International Conference on Learning Representations (ICLR)*. [arXiv:1904.09751](https://arxiv.org/abs/1904.09751)
+   - Nucleus sampling method
 
----
+5. **Papineni, K., et al. (2002).** "BLEU: A Method for Automatic Evaluation of Machine Translation." *Proceedings of the 40th Annual Meeting of the Association for Computational Linguistics (ACL)*.
+   - BLEU score metric
 
-## 8. Limitations & Future Work
+### Implementation Resources
 
-### 8.1 Current Limitations
+6. **PyTorch Documentation.** "Transformer Tutorial." PyTorch.org. [https://pytorch.org/tutorials/beginner/transformer_tutorial.html](https://pytorch.org/tutorials/beginner/transformer_tutorial.html)
 
-1. **Overfitting:** Large train-validation loss gap
-2. **Repetition:** Model gets stuck in loops
-3. **Beam Search Ineffective:** Doesn't improve over greedy
-4. **Limited Vocabulary:** Hallucinates non-existent words
+7. **Hugging Face.** "The Annotated Transformer." [http://nlp.seas.harvard.edu/2018/04/03/attention.html](http://nlp.seas.harvard.edu/2018/04/03/attention.html)
+   - Detailed Transformer implementation guide
 
-### 8.2 Proposed Improvements
+8. **Alammar, J.** "The Illustrated Transformer." [https://jalammar.github.io/illustrated-transformer/](https://jalammar.github.io/illustrated-transformer/)
+   - Visual explanation of Transformer architecture
 
-**Short-term (Quick fixes):**
-1. Add repetition penalty in decoding (subtract 1.0 from repeated token logits)
-2. Implement length penalty for beam search
-3. Increase dropout to 0.2 (reduce overfitting)
-4. Use gradient accumulation for larger effective batch size
 
-**Long-term (Architectural):**
-1. **Scale training data:** 50k → 200k+ samples (Expected BLEU: 10-15)
-2. **Larger model:** 256-dim → 512-dim, 3 layers → 6 layers
-3. **Better tokenizer:** Switch to mBART or XLM-RoBERTa (multilingual)
-4. **Pre-trained embeddings:** Initialize with mBART weights
-5. **Copy mechanism:** Help with named entities and rare words
-6. **Attention visualization:** Debug what model learns
 
-**Expected Impact:**
-```
-Current:     BLEU-4 = 2.98
-+ More data: BLEU-4 = 10-15
-+ Larger model: BLEU-4 = 18-25
-```
 
----
 
-## 9. Conclusion
-
-This project successfully implemented a complete Transformer decoder system with:
-- ✅ Proper encoder-decoder architecture with cross-attention
-- ✅ Autoregressive generation with causal masking
-- ✅ Three decoding strategies (greedy, beam search, nucleus sampling)
-- ✅ Quantitative (BLEU) and qualitative evaluation
-- ✅ Full training and evaluation pipeline
-
-**Key Findings:**
-1. Model learns meaningful translation patterns (BLEU 2.98)
-2. Training data is the primary constraint (7x improvement with 5x data)
-3. Beam search underperforms due to overfitting, not implementation error
-4. Repetition remains an issue requiring decoding-time penalties
-
-**Academic Achievement:**
-All assignment requirements fulfilled with working implementation. Low BLEU scores reflect data/resource constraints rather than implementation errors, which is expected and acceptable for coursework.
-
-With production-scale resources (200k+ samples, larger architecture), this implementation would achieve competitive translation quality (BLEU 15-25).
-
----
-
-## 10. References
-
-1. Vaswani, A., et al. (2017). "Attention Is All You Need." *NeurIPS*.
-2. Bojar, O., et al. (2014). "Findings of the 2014 Workshop on Statistical Machine Translation." *WMT*.
-3. Papineni, K., et al. (2002). "BLEU: a Method for Automatic Evaluation of Machine Translation." *ACL*.
-4. Holtzman, A., et al. (2019). "The Curious Case of Neural Text Degeneration." *ICLR*.
-5. Freitag, M., & Al-Onaizan, Y. (2017). "Beam Search Strategies for Neural Machine Translation." *ACL Workshop*.
-
----
-
-## Files Included
-
-```
-📦 Submission Package
-├── 📄 transformer_decoder.py (Complete implementation)
-├── 💾 best_model.pth (Best checkpoint, epoch 9)
-├── 💾 transformer_decoder_final.pth (Final model + metadata)
-├── 📊 training_curves.png (Loss visualization)
-└── 📝 README.md (This report)
-```
-
----
-
-**Date:** November 2025  
-**Course:** DAM202 - Transformer Decoder Assignment
