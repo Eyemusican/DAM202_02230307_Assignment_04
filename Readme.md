@@ -189,7 +189,7 @@ Best Validation Loss: 4.5569 (Epoch 27)
 
 ### Training Curves
 
-![alt text](image-2.png)
+![assets/image-2.png](assets/image-2.png)
 
 **Observations:**
 1. **Convergence Pattern:** Training loss decreased steadily from 4.68 to 2.89
@@ -198,8 +198,7 @@ Best Validation Loss: 4.5569 (Epoch 27)
 4. **Early Stopping:** Triggered at epoch 32 after 5 epochs without validation improvement
 
 ### Epoch-by-Epoch Progress
-
-![alt text](image-3.png)
+![assets/image-3.png](assets/image-3.png)
 
  
 
@@ -285,7 +284,7 @@ Output: "besonderen strategie fur die wahlen gewalt gehoren einer strategie..."
 Evaluated on 100 validation samples:
 
 
-![alt text](image-4.png)
+![assets/image-4.png](assets/image-4.png)
 
 ### Key Findings
 
@@ -382,8 +381,6 @@ Analysis:  Repetition of "wahlen anzahl" indicates model uncertainty
 
 ## References
 
-### Academic Papers
-
 1. **Vaswani, A., et al. (2017).** "Attention Is All You Need." *Advances in Neural Information Processing Systems (NeurIPS)*, 30. [arXiv:1706.03762](https://arxiv.org/abs/1706.03762)
    - Original Transformer architecture paper
 
@@ -399,15 +396,7 @@ Analysis:  Repetition of "wahlen anzahl" indicates model uncertainty
 5. **Papineni, K., et al. (2002).** "BLEU: A Method for Automatic Evaluation of Machine Translation." *Proceedings of the 40th Annual Meeting of the Association for Computational Linguistics (ACL)*.
    - BLEU score metric
 
-### Implementation Resources
 
-6. **PyTorch Documentation.** "Transformer Tutorial." PyTorch.org. [https://pytorch.org/tutorials/beginner/transformer_tutorial.html](https://pytorch.org/tutorials/beginner/transformer_tutorial.html)
-
-7. **Hugging Face.** "The Annotated Transformer." [http://nlp.seas.harvard.edu/2018/04/03/attention.html](http://nlp.seas.harvard.edu/2018/04/03/attention.html)
-   - Detailed Transformer implementation guide
-
-8. **Alammar, J.** "The Illustrated Transformer." [https://jalammar.github.io/illustrated-transformer/](https://jalammar.github.io/illustrated-transformer/)
-   - Visual explanation of Transformer architecture
 
 
 
